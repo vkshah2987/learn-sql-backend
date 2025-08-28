@@ -1,0 +1,112 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  displayName String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  attempts  Attempt[]
+  progress  Progress[]
+  learningEvents LearningEvent[]
+}
+
+model Lesson {
+  id          String    @id @default(uuid())
+  slug        String    @unique
+  title       String
+  summary     String?
+  content     Json      // JSONB for lesson content
+  orderIndex  Int       @map("order_index")
+  isActive    Boolean   @default(true) @map("is_active")
+  tags        String[]  // Array of tags like ['select', 'where']
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  exercises   Exercise[]
+  progress    Progress[]
+  
+  @@map("lessons")
+}
+
+model Exercise {
+  id            String    @id @default(uuid())
+  lessonId      String    @map("lesson_id")
+  prompt        String    // The exercise question/prompt
+  expectedSql   String?   @map("expected_sql") // Optional expected query
+  expectedResult Json?    @map("expected_result") // Expected result structure
+  difficulty    String    @default("intro") // intro, beginner, intermediate, advanced
+  orderIndex    Int       @map("order_index")
+  hints         String[]  // Array of hints
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  lesson        Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  attempts      Attempt[]
+  
+  // Unique constraint for lesson and order index
+  @@unique([lessonId, orderIndex], name: "lessonId_orderIndex")
+  @@map("exercises")
+}
+
+model Attempt {
+  id          String    @id @default(uuid())
+  userId      Int       @map("user_id")
+  exerciseId  String    @map("exercise_id")
+  sql         String    // The SQL query submitted
+  isCorrect   Boolean   @map("is_correct")
+  feedback    String?   // AI-generated feedback
+  result      Json?     // Query execution result
+  score       Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise    Exercise  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  
+  @@map("attempts")
+}
+
+model Progress {
+  id        String    @id @default(uuid())
+  userId    Int       @map("user_id")
+  lessonId  String    @map("lesson_id")
+  status    String    @default("not_started") // not_started, in_progress, completed
+  score     Int       @default(0)
+  completedAt DateTime? @map("completed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson    Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  
+  // Unique constraint to ensure one progress record per user per lesson
+  @@unique([userId, lessonId])
+  @@map("progress")
+}
+
+model LearningEvent {
+  id          String    @id @default(uuid())
+  userId      Int       @map("user_id")
+  eventType   String    @map("event_type") // lesson_started, exercise_completed, difficulty_adjusted, etc.
+  metadata    Json      // Additional event data
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("learning_events")
+}
